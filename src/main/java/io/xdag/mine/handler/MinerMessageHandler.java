@@ -71,14 +71,14 @@ public class MinerMessageHandler extends ByteToMessageCodec<byte[]> {
             log.debug("Send a message for miner: {} with sectorNo={},length={}",
                     channel.getAddressHash(),sectorNo, len);
             BytesUtils.arrayReverse(bytes);
-            out.writeBytes(Native.dfslib_encrypt_array(bytes, 1, sectorNo));
+            out.writeBytes(bytes);
             channel.getOutBound().add();
         } else if (len == 2 * DATA_SIZE) {
             log.debug("Send a message with sectorNo={},length={}, hex is[{}]", sectorNo, len, Hex.encodeHexString(bytes));
-            out.writeBytes(Native.dfslib_encrypt_array(bytes, 2, sectorNo));
+            out.writeBytes(bytes);
             channel.getOutBound().add(2);
         } else if (len == 16 * DATA_SIZE) {
-            out.writeBytes(Native.dfslib_encrypt_array(bytes, 16, sectorNo));
+            out.writeBytes(bytes);
             channel.getOutBound().add(16);
         } else {
             log.debug("No message of this length:{} field type.", len);
@@ -96,7 +96,7 @@ public class MinerMessageHandler extends ByteToMessageCodec<byte[]> {
                     channel.getAddressHash());
             byte[] encryptData = new byte[DATA_SIZE];
             in.readBytes(encryptData);
-            byte[] unCryptData = Native.dfslib_uncrypt_array(encryptData, 1, sectorNo);
+            byte[] unCryptData = encryptData;
             BytesUtils.arrayReverse(unCryptData);
             //The message received is the worker_name
             if(BytesUtils.compareTo(unCryptData,28,4, BigInteger.valueOf(WORKERNAME_HEADER_WORD).toByteArray(),0,4)==0){
@@ -116,7 +116,7 @@ public class MinerMessageHandler extends ByteToMessageCodec<byte[]> {
                     channel.getAddressHash());
             byte[] encryptData = new byte[512];
             in.readBytes(encryptData);
-            byte[] unCryptData = Native.dfslib_uncrypt_array(encryptData, 16, sectorNo);
+            byte[] unCryptData = encryptData;
             long transportHeader = BytesUtils.bytesToLong(unCryptData, 0, true);
             int ttl = (int) ((transportHeader >> 8) & 0xff);
             int crc = BytesUtils.bytesToInt(unCryptData, 4, true);
