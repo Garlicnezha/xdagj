@@ -71,11 +71,9 @@ public class XdagBlockHandler extends ByteToMessageCodec<XdagBlock> {
         byte[] encryptData;
         // libp2p没有三次握手
         if (channel.getClass().equals(XdagChannel.class)) {
-            encryptData = Native.dfslib_encrypt_byte_sector(unCryptData, unCryptData.length,
-                    channel.getNode().getStat().Outbound.get() - 3 + 1);
+            encryptData = unCryptData;
         } else {
-            encryptData = Native.dfslib_encrypt_byte_sector(unCryptData, unCryptData.length,
-                    channel.getNode().getStat().Outbound.get() + 1);
+            encryptData = unCryptData;
         }
         out.writeBytes(encryptData);
         channel.getNode().getStat().Outbound.add();
@@ -89,13 +87,11 @@ public class XdagBlockHandler extends ByteToMessageCodec<XdagBlock> {
             in.readBytes(encryptData);
             byte[] unCryptData;
             if (channel.getClass().equals(XdagChannel.class)) {
-                unCryptData = Native.dfslib_uncrypt_byte_sector(encryptData, encryptData.length,
-                        channel.getNode().getStat().Inbound.get() - 3 + 1);
+                unCryptData = encryptData;
             }
             // libp2p没有三次握手
             else {
-                unCryptData = Native.dfslib_uncrypt_byte_sector(encryptData, encryptData.length,
-                        channel.getNode().getStat().Inbound.get() + 1);
+                unCryptData = encryptData;
             }
             channel.getNode().getStat().Inbound.add();
 

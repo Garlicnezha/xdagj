@@ -130,7 +130,7 @@ public class MinerConnectTest {
     @Test
     public void testMinerConnect()
             throws InvalidAlgorithmParameterException, NoSuchAlgorithmException, NoSuchProviderException {
-        Native.crypt_start();
+//        Native.crypt_start();
         KeyPair key = Keys.createEcKeyPair();
         Block address = generateAddressBlock(config, key, new Date().getTime());
         MutableBytes encoded = address.getXdagBlock().getData();
@@ -202,7 +202,7 @@ public class MinerConnectTest {
         @Override
         protected void decode(ChannelHandlerContext ctx, ByteBuf in, List<Object> out) {
             if (in.readableBytes() >= XdagBlock.XDAG_BLOCK_SIZE) {
-                Native.crypt_start();
+//                Native.crypt_start();
                 ByteBuf byteBuf = Unpooled.buffer();
 
                 byte[] address = new byte[512];

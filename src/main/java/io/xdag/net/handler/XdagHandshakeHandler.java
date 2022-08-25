@@ -127,8 +127,7 @@ public class XdagHandshakeHandler extends ByteToMessageDecoder {
             in.readBytes(read);
             log.debug("接受区块：" + Hex.encodeHexString(read));
             // 接受区块
-            byte[] uncryptData = Native.dfslib_uncrypt_byte_sector(
-                    read, read.length, channel.getNode().getStat().Inbound.get() - 3 + 1);
+            byte[] uncryptData = read;
             log.debug(
                     "in="
                             + channel.getNode().getStat().Inbound.get()
