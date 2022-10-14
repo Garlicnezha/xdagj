@@ -40,6 +40,7 @@ import io.xdag.utils.BytesUtils;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.hyperledger.besu.crypto.KeyPair;
 import org.bouncycastle.util.encoders.Hex;
 import org.hyperledger.besu.crypto.SECPSignature;
@@ -52,6 +53,7 @@ import java.util.List;
 
 import static io.xdag.config.Constants.BI_OURS;
 import static io.xdag.db.BlockStore.*;
+import static io.xdag.utils.BasicUtils.amount2xdag;
 
 @Slf4j
 public class SnapshotJ extends RocksdbKVSource {
@@ -113,7 +115,7 @@ public class SnapshotJ extends RocksdbKVSource {
         snapshotSource.put(new byte[]{SNAPSHOT_PRESEED}, preSeed);
     }
 
-    public void saveSnapshotToIndex(BlockStore blockStore, List<KeyPair> keys,long snapshotTime) {
+    public void saveSnapshotToIndex(BlockStore blockStore, List<KeyPair> keys,long snapshotTime,AddressStore addressStore) {
         try (RocksIterator iter = getDb().newIterator()) {
             for (iter.seekToFirst(); iter.isValid(); iter.next()) {
                 if (iter.key()[0] == 0x30) {
@@ -133,15 +135,22 @@ public class SnapshotJ extends RocksdbKVSource {
                         if (blockInfo.getSnapshotInfo() != null) {
                             //public key exists
                             if (snapshotInfo.getType()) {
-                                byte[] ecKeyPair = snapshotInfo.getData();
-                                for (int i = 0; i < keys.size(); i++) {
-                                    KeyPair key = keys.get(i);
-                                    if (Bytes.wrap(key.getPublicKey().asEcPoint(Sign.CURVE).getEncoded(true)).compareTo(Bytes.wrap(ecKeyPair)) == 0) {
-                                        flag |= BI_OURS;
-                                        keyIndex = i;
-                                        ourBalance += blockInfo.getAmount();
-                                        break;
+                                if(blockInfo.getAmount() != UInt64.ZERO.toLong()){
+                                    byte[] ecKeyPair = snapshotInfo.getData();
+                                    byte[] pubKey = Hash.sha256hash160(Bytes.wrap(ecKeyPair));
+                                    for (int i = 0; i < keys.size(); i++) {
+                                        KeyPair key = keys.get(i);
+                                        if (Bytes.wrap(key.getPublicKey().asEcPoint(Sign.CURVE).getEncoded(true)).compareTo(Bytes.wrap(ecKeyPair)) == 0) {
+                                            flag |= BI_OURS;
+                                            keyIndex = i;
+                                            ourBalance += blockInfo.getAmount();
+                                            break;
+                                        }
                                     }
+                                    UInt64 balance = addressStore.getBalanceByAddress(pubKey);
+                                    balance = balance.add(blockInfo.getAmount());
+                                    addressStore.updateBalance(pubKey,balance);
+                                    blockInfo.setAmount(UInt64.ZERO.toLong());
                                 }
                             } else {    //Verify signature
                                 Block block = new Block(new XdagBlock(snapshotInfo.getData()));

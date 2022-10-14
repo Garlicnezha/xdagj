@@ -31,17 +31,12 @@ import io.xdag.config.MainnetConfig;
 import io.xdag.core.XdagField.FieldType;
 import io.xdag.crypto.Hash;
 import io.xdag.crypto.Sign;
-import io.xdag.db.DatabaseName;
+import io.xdag.db.*;
 import io.xdag.db.rocksdb.RocksdbFactory;
-import io.xdag.db.BlockStore;
-import io.xdag.db.OrphanPool;
 import io.xdag.listener.BlockMessage;
 import io.xdag.listener.Listener;
 import io.xdag.listener.PretopMessage;
 import io.xdag.mine.randomx.RandomX;
-import io.xdag.db.SnapshotJ;
-import io.xdag.db.SnapshotChainStore;
-import io.xdag.db.SnapshotChainStoreImpl;
 import io.xdag.utils.BasicUtils;
 import io.xdag.utils.XdagTime;
 import io.xdag.wallet.Wallet;
@@ -94,6 +89,7 @@ public class BlockchainImpl implements Blockchain {
     };
 
     private final Wallet wallet;
+    private final AddressStore addressStore;
     private final BlockStore blockStore;
     /**
      * 非Extra orphan存放
@@ -127,7 +123,7 @@ public class BlockchainImpl implements Blockchain {
         // 1. init chain state from rocksdb
         this.blockStore = kernel.getBlockStore();
         this.orphanPool = kernel.getOrphanPool();
-
+        this.addressStore = kernel.getAddressStore();
         // 2. if enable snapshot, init snapshot from rocksdb
         if (kernel.getConfig().getSnapshotSpec().isSnapshotEnabled()
                 && kernel.getConfig().getSnapshotSpec().getSnapshotHeight() > 0
@@ -179,7 +175,7 @@ public class BlockchainImpl implements Blockchain {
         System.out.println("init snapshot...");
         snapshotJ.setConfig(kernel.getConfig());
         snapshotJ.init();
-        snapshotJ.saveSnapshotToIndex(this.blockStore, kernel.getWallet().getAccounts(),kernel.getConfig().getSnapshotSpec().getSnapshotTime());
+        snapshotJ.saveSnapshotToIndex(this.blockStore, kernel.getWallet().getAccounts(),kernel.getConfig().getSnapshotSpec().getSnapshotTime(),this.addressStore);
         Block lastBlock = blockStore.getBlockByHeight(snapshotHeight);
 
         xdagStats.balance = snapshotJ.getOurBalance();

@@ -137,6 +137,10 @@ public class SnapshotJTest {
                 dbFactory.getDB(DatabaseName.TXHISTORY));
 
         blockStore.reset();
+
+        AddressStore addressStore = new AddressStore(dbFactory.getDB(DatabaseName.ADDRESS));
+        addressStore.reset();
+
         OrphanPool orphanPool = new OrphanPool(dbFactory.getDB(DatabaseName.ORPHANIND));
         orphanPool.reset();
 
@@ -197,10 +201,13 @@ public class SnapshotJTest {
                 dbFactory.getDB(DatabaseName.TXHISTORY));
         blockStore.reset();
 
+        AddressStore addressStore = new AddressStore(dbFactory.getDB(DatabaseName.ADDRESS));
+        addressStore.reset();
+
         List<KeyPair> keys = new ArrayList<>();
         keys.add(poolKey);
 
-        snapshotSource.saveSnapshotToIndex(blockStore, keys,0);
+        snapshotSource.saveSnapshotToIndex(blockStore, keys,0,addressStore);
 
         //Verify the total balance of the current account
         assertEquals("254976.0", String.valueOf(BasicUtils.amount2xdag(snapshotSource.getOurBalance())));

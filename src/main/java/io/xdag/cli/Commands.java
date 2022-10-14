@@ -44,6 +44,7 @@ import org.apache.commons.lang3.StringUtils;
 import org.apache.commons.lang3.time.FastDateFormat;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.util.encoders.Hex;
 import org.hyperledger.besu.crypto.KeyPair;
 
@@ -61,6 +62,7 @@ import static io.xdag.core.BlockState.MAIN;
 import static io.xdag.config.Constants.*;
 import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.utils.BasicUtils.*;
+import static io.xdag.utils.BasicUtils.amount2xdag;
 import static io.xdag.utils.BytesUtils.long2UnsignedLong;
 
 @Slf4j
@@ -194,6 +196,13 @@ public class Commands {
             Block block = kernel.getBlockStore().getBlockInfoByHash(Bytes32.wrap(key));
             return "Balance:" + String.format("%.9f", amount2xdag(block.getInfo().getAmount())) + " XDAG";
         }
+    }
+
+    public String addressBalance(String address){
+            byte[] hash;
+            hash = Hex.decode(address);
+            UInt64 balance = kernel.getAddressStore().getBalanceByAddress(hash);
+            return "Balance:" + String.format("%.9f",amount2xdag(balance.toLong())) + " XDAG";
     }
 
     /**
