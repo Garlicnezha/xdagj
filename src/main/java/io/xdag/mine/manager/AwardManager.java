@@ -28,6 +28,8 @@ import io.xdag.config.PoolConfig;
 import io.xdag.consensus.Task;
 import org.apache.tuweni.bytes.Bytes32;
 
+import java.util.HashMap;
+
 public interface AwardManager {
 
     void onNewTask(Task task);
@@ -41,4 +43,6 @@ public interface AwardManager {
     void updatePoolConfig(double poolFeeRation,double poolRewardRation,double poolDirectRation, double poolFundRation);
 
     PoolConfig getPoolConfig();
+
+    HashMap<byte[],Double> getRewardsPool();
 }

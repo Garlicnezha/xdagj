@@ -53,6 +53,9 @@ import static io.xdag.utils.PubkeyAddressUtils.checkAddress;
 import static io.xdag.utils.PubkeyAddressUtils.fromBase58;
 import static io.xdag.utils.PubkeyAddressUtils.toBase58;
 
+import java.io.File;
+import java.io.FileWriter;
+import java.io.IOException;
 import java.math.BigInteger;
 import java.net.InetSocketAddress;
 import java.nio.charset.StandardCharsets;
@@ -73,6 +76,7 @@ import java.util.stream.Collectors;
 
 import io.xdag.crypto.Keys;
 import io.xdag.utils.BasicUtils;
+import io.xdag.utils.PubkeyAddressUtils;
 import io.xdag.wallet.Wallet;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.StringUtils;
@@ -630,6 +634,20 @@ public class Commands {
         }
 
         return stringBuilder.toString();
+    }
+    public String rewardspool(){
+        HashMap<byte[],Double> hashMap = kernel.getAwardManager().getRewardsPool();
+
+        try {
+            FileWriter writer = new FileWriter(new File("./logs/rewardsPool.txt"));
+            for (Map.Entry<byte[],Double> entry: hashMap.entrySet()) {
+                writer.write(PubkeyAddressUtils.toBase58(entry.getKey())+" get rewards:   "+entry.getValue() + "\n");
+            }
+            writer.close();
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
+        return "printDone";
     }
 
     public String keygen()

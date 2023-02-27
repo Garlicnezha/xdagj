@@ -61,6 +61,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+
+import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
@@ -69,6 +71,7 @@ import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes32;
 import org.apache.tuweni.units.bigints.UInt64;
 import org.hyperledger.besu.crypto.KeyPair;
+import redis.clients.jedis.Jedis;
 
 
 @Slf4j
@@ -108,10 +111,12 @@ public class AwardManagerImpl implements AwardManager, Runnable {
     protected List<Bytes32> minShares = new CopyOnWriteArrayList<>(new ArrayList<>(16));
     protected volatile long currentTaskTime;
     protected volatile long currentTaskIndex;
+
     protected Config config;
     private List<Miner> miners;
     @Setter
     private MinerManager minerManager;
+
     private ArrayList<Double> diff = new ArrayList<>();
     private ArrayList<Double> prev_diff = new ArrayList<>();
     private final String fundAddress;
@@ -121,6 +126,8 @@ public class AwardManagerImpl implements AwardManager, Runnable {
             .build());
 
     private volatile boolean isRunning = false;
+    @Getter
+    public HashMap<byte[],Double> minerRewardsPool;
 
     public AwardManagerImpl(Kernel kernel) {
         this.kernel = kernel;
@@ -132,6 +139,7 @@ public class AwardManagerImpl implements AwardManager, Runnable {
         init();
         setPoolConfig();
         this.fundAddress = config.getPoolSpec().getFundAddress();
+        this.minerRewardsPool = new HashMap<>();
     }
 
     /**
@@ -154,6 +162,10 @@ public class AwardManagerImpl implements AwardManager, Runnable {
             sum /= diffcount;
         }
         return sum;
+    }
+
+    public HashMap<byte[],Double> getRewardsPool(){
+        return minerRewardsPool;
     }
 
     /**
@@ -622,9 +634,11 @@ public class AwardManagerImpl implements AwardManager, Runnable {
                 continue;
             }
             payAmount = payAmount.add(paymentSum);
+            double accumulation = minerRewardsPool.get(miner.getAddressHashByte()) == null ? 0 : minerRewardsPool.get(miner.getAddressHashByte()).doubleValue();
+            accumulation += amount2xdag(payAmount);
+            minerRewardsPool.put(miner.getAddressHashByte(),accumulation);
             receipt.add(new Address(miner.getAddressHash(), XDAG_FIELD_OUTPUT, paymentSum,true));
             if (receipt.size() == paymentsPerBlock) {
-
                 transaction(hashLow, receipt, payAmount, keyPos);
                 payAmount = UInt64.ZERO;
                 receipt.clear();

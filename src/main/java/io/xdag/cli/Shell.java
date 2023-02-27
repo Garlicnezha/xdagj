@@ -87,9 +87,17 @@ public class Shell extends JlineCommandRegistry implements CommandRegistry, Teln
         commandExecute.put("terminate", new CommandMethods(this::processTerminate, this::defaultCompleter));
         commandExecute.put("address", new CommandMethods(this::processAddress, this::defaultCompleter));
         commandExecute.put("oldbalance", new CommandMethods(this::processOldBalance, this::defaultCompleter));
+        commandExecute.put("rewardspool",new CommandMethods(this::processRewards,this::defaultCompleter));
         registerCommands(commandExecute);
     }
 
+    private void processRewards(CommandInput input){
+        try {
+            println(commands.rewardspool());
+        } catch (Exception e) {
+            saveException(e);
+        }
+    }
     private void processXferToNew(CommandInput input) {
         final String[] usage = {
                 "xfertonew -  transfer the old balance to new address \n",
