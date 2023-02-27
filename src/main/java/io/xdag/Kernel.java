@@ -47,7 +47,6 @@ import io.xdag.db.BlockStore;
 import io.xdag.db.DatabaseFactory;
 import io.xdag.db.DatabaseName;
 import io.xdag.db.OrphanPool;
-import io.xdag.db.redis.JedisDBPool;
 import io.xdag.db.rocksdb.RocksdbFactory;
 import io.xdag.mine.MinerServer;
 import io.xdag.mine.manager.AwardManager;
@@ -100,7 +99,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.tuweni.bytes.Bytes;
-import redis.clients.jedis.Jedis;
+
 
 @Slf4j
 @Getter
@@ -139,7 +138,6 @@ public class Kernel {
 
     private TelnetServer telnetServer;
 
-    private Jedis minerRewards;
 
     private RandomX randomx;
 
@@ -216,8 +214,6 @@ public class Kernel {
         orphanPool = new OrphanPool(dbFactory.getDB(DatabaseName.ORPHANIND));
         log.info("Orphan Pool init.");
         orphanPool.init();
-
-        minerRewards = JedisDBPool.getConnectJedis();
 
 
         // ====================================
