@@ -462,12 +462,12 @@ public class Kernel {
             web3WebSocketServer.stop();
         }
 
-        HashMap<byte[],Double> hashMap = this.getAwardManager().getRewardsPool();
+        HashMap<String,Double> hashMap = this.getAwardManager().getRewardsPool();
 
         try {
             FileWriter writer = new FileWriter(new File("./logs/rewardsPool.txt"));
-            for (Map.Entry<byte[],Double> entry: hashMap.entrySet()) {
-                writer.write(PubkeyAddressUtils.toBase58(entry.getKey())+" get rewards:   "+entry.getValue() + "\n");
+            for (Map.Entry<String,Double> entry: hashMap.entrySet()) {
+                writer.write(entry.getKey()+" get rewards:   "+entry.getValue() + "\n");
             }
             writer.close();
         } catch (IOException e) {

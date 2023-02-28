@@ -44,5 +44,5 @@ public interface AwardManager {
 
     PoolConfig getPoolConfig();
 
-    HashMap<byte[],Double> getRewardsPool();
+    HashMap<String,Double> getRewardsPool();
 }

@@ -127,7 +127,7 @@ public class AwardManagerImpl implements AwardManager, Runnable {
 
     private volatile boolean isRunning = false;
     @Getter
-    public HashMap<byte[],Double> minerRewardsPool;
+    public HashMap<String,Double> minerRewardsPool;
 
     public AwardManagerImpl(Kernel kernel) {
         this.kernel = kernel;
@@ -164,7 +164,7 @@ public class AwardManagerImpl implements AwardManager, Runnable {
         return sum;
     }
 
-    public HashMap<byte[],Double> getRewardsPool(){
+    public HashMap<String, Double> getRewardsPool(){
         return minerRewardsPool;
     }
 
@@ -636,9 +636,9 @@ public class AwardManagerImpl implements AwardManager, Runnable {
                 continue;
             }
             payAmount = payAmount.add(paymentSum);
-            double accumulation = minerRewardsPool.get(miner.getAddressHashByte()) == null ? 0 : minerRewardsPool.get(miner.getAddressHashByte()).doubleValue();
+            Double accumulation = minerRewardsPool.get(PubkeyAddressUtils.toBase58(miner.getAddressHashByte())) == null ? 0 : minerRewardsPool.get(PubkeyAddressUtils.toBase58(miner.getAddressHashByte())).doubleValue();
             accumulation += amount2xdag(payAmount);
-            minerRewardsPool.put(miner.getAddressHashByte(),accumulation);
+            minerRewardsPool.put(PubkeyAddressUtils.toBase58(miner.getAddressHashByte()),accumulation);
             receipt.add(new Address(miner.getAddressHash(), XDAG_FIELD_OUTPUT, paymentSum,true));
             if (receipt.size() == paymentsPerBlock) {
                 transaction(hashLow, receipt, payAmount, keyPos);
