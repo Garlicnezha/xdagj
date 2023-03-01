@@ -637,7 +637,7 @@ public class AwardManagerImpl implements AwardManager, Runnable {
             }
             payAmount = payAmount.add(paymentSum);
             Double accumulation = minerRewardsPool.get(PubkeyAddressUtils.toBase58(miner.getAddressHashByte())) == null ? 0 : minerRewardsPool.get(PubkeyAddressUtils.toBase58(miner.getAddressHashByte())).doubleValue();
-            accumulation += amount2xdag(payAmount);
+            accumulation += amount2xdag(paymentSum);
             minerRewardsPool.put(PubkeyAddressUtils.toBase58(miner.getAddressHashByte()),accumulation);
             receipt.add(new Address(miner.getAddressHash(), XDAG_FIELD_OUTPUT, paymentSum,true));
             if (receipt.size() == paymentsPerBlock) {
