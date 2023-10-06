@@ -38,6 +38,7 @@ import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_SIGN_OUT;
 import io.xdag.config.Config;
 import io.xdag.crypto.Hash;
 import io.xdag.crypto.Sign;
+import io.xdag.utils.BasicUtils;
 import io.xdag.utils.BytesUtils;
 import java.math.BigInteger;
 import java.nio.ByteOrder;
@@ -57,6 +58,7 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.math.ec.ECPoint;
 import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SECPPublicKey;
@@ -119,7 +121,7 @@ public class Block implements Cloneable {
         parsed = true;
         info = new BlockInfo();
         this.info.setTimestamp(timestamp);
-        this.info.setFee(0);
+        this.info.setFee(XAmount.ZERO);
         int lenghth = 0;
 
         setType(config.getXdagFieldHeader(), lenghth++);
@@ -251,7 +253,7 @@ public class Block implements Cloneable {
         this.transportHeader = header.getLong(0, ByteOrder.LITTLE_ENDIAN);
         this.info.type = header.getLong(8, ByteOrder.LITTLE_ENDIAN);
         this.info.setTimestamp(header.getLong(16, ByteOrder.LITTLE_ENDIAN));
-        this.info.setFee(header.getLong(24, ByteOrder.LITTLE_ENDIAN));
+        this.info.setFee(XAmount.of(header.getLong(24, ByteOrder.LITTLE_ENDIAN)));
         for (int i = 1; i < XdagBlock.XDAG_BLOCK_FIELDS; i++) {
             XdagField field = xdagBlock.getField(i);
             if (field == null) {
@@ -369,7 +371,7 @@ public class Block implements Cloneable {
     }
 
     private byte[] getEncodedHeader() {
-        byte[] fee = BytesUtils.longToBytes(getFee(), true);
+        byte[] fee = BytesUtils.longToBytes(Long.parseLong(getFee().toString()), true);
         byte[] time = BytesUtils.longToBytes(getTimestamp(), true);
         byte[] type = BytesUtils.longToBytes(getType(), true);
         byte[] transport = new byte[8];
@@ -524,7 +526,7 @@ public class Block implements Cloneable {
         return this.info.type;
     }
 
-    public long getFee() {
+    public XAmount getFee() {
         return this.info.getFee();
     }
 

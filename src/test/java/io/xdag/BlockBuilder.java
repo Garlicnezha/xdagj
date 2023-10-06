@@ -38,6 +38,8 @@ import io.xdag.core.XUnit;
 import io.xdag.crypto.Hash;
 import java.util.ArrayList;
 import java.util.List;
+
+import io.xdag.utils.BasicUtils;
 import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.bouncycastle.util.encoders.Hex;
@@ -90,6 +92,7 @@ public class BlockBuilder {
         List<KeyPair> keys = new ArrayList<>();
         keys.add(key);
         Block b = new Block(config, xdagTime, refs, null, false, keys, null, 0); // orphan
+        b.getInfo().setFee(XAmount.of(100,XUnit.MILLI_XDAG));
         b.signOut(key);
         return b;
     }

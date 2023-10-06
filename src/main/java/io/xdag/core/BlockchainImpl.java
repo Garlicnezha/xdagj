@@ -40,11 +40,7 @@ import static io.xdag.config.Constants.MessageType.PRE_TOP;
 import static io.xdag.config.Constants.SYNC_FIX_HEIGHT;
 import static io.xdag.core.ImportResult.IMPORTED_BEST;
 import static io.xdag.core.ImportResult.IMPORTED_NOT_BEST;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_HEAD;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_HEAD_TEST;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_INPUT;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUT;
-import static io.xdag.core.XdagField.FieldType.XDAG_FIELD_OUTPUT;
+import static io.xdag.core.XdagField.FieldType.*;
 import static io.xdag.utils.BasicUtils.compareAmountTo;
 import static io.xdag.utils.BasicUtils.getDiffByHash;
 import static io.xdag.utils.BasicUtils.hash2byte;
@@ -54,13 +50,8 @@ import static io.xdag.utils.BytesUtils.long2UnsignedLong;
 import static io.xdag.utils.WalletUtils.toBase58;
 
 import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Set;
+import java.security.PublicKey;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
@@ -68,6 +59,7 @@ import java.util.concurrent.ScheduledThreadPoolExecutor;
 import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.TimeUnit;
 
+import io.xdag.crypto.Base58;
 import org.apache.commons.collections4.CollectionUtils;
 import org.apache.commons.lang3.RandomUtils;
 import org.apache.commons.lang3.concurrent.BasicThreadFactory;
@@ -75,9 +67,11 @@ import org.apache.tuweni.bytes.Bytes;
 import org.apache.tuweni.bytes.Bytes32;
 import org.apache.tuweni.bytes.MutableBytes;
 import org.apache.tuweni.bytes.MutableBytes32;
+import org.apache.tuweni.units.bigints.UInt64;
 import org.bouncycastle.math.ec.ECPoint;
 import org.bouncycastle.util.Arrays;
 import org.bouncycastle.util.encoders.Hex;
+import org.checkerframework.checker.units.qual.A;
 import org.hyperledger.besu.crypto.KeyPair;
 import org.hyperledger.besu.crypto.SECPPublicKey;
 import org.hyperledger.besu.crypto.SECPSignature;
@@ -112,6 +106,7 @@ import lombok.extern.slf4j.Slf4j;
 @Slf4j
 @Getter
 public class BlockchainImpl implements Blockchain {
+    private static final XAmount minGas = XAmount.of(100,XUnit.MILLI_XDAG);
 
     private static final ThreadFactory factory = new BasicThreadFactory.Builder()
             .namingPattern("check-main-%d")
@@ -143,6 +138,7 @@ public class BlockchainImpl implements Blockchain {
     private SnapshotStore snapshotStore;
     private SnapshotStore snapshotAddressStore;
     private final XdagExtStats xdagExtStats;
+    public Filter filter;
     @Getter
     private byte[] preSeed;
 
@@ -155,6 +151,7 @@ public class BlockchainImpl implements Blockchain {
         this.blockStore = kernel.getBlockStore();
         this.orphanBlockStore = kernel.getOrphanBlockStore();
         snapshotHeight = kernel.getConfig().getSnapshotSpec().getSnapshotHeight();
+        this.filter = new Filter(blockStore);
 
         // 2. if enable snapshot, init snapshot from rocksdb
         if (kernel.getConfig().getSnapshotSpec().isSnapshotEnabled()
@@ -335,13 +332,19 @@ public class BlockchainImpl implements Blockchain {
                                 log.debug("Ref block's time >= block's time");
                                 return result;
                             }
-
+                            if(ref.getType() == XDAG_FIELD_IN && refBlock.getInfo().getAmount().subtract(minGas).isNegative()){
+                                result = ImportResult.INVALID_BLOCK;
+                                result.setHashlow(refBlock.getHashLow());
+                                result.setErrorInfo("Ref block's balance < minGas");
+                                log.debug("Ref block's balance < minGas");
+                                return result;
+                            }
                         }
                 } else {
-                    if(ref!= null && ref.type == XDAG_FIELD_INPUT && !addressStore.addressIsExist(BytesUtils.byte32ToArray(ref.getAddress()))){
+                    if(ref!= null && ref.type == XDAG_FIELD_INPUT && addressStore.getBalanceByAddress(BytesUtils.byte32ToArray(ref.getAddress())).subtract(minGas).isNegative()){
                         result = ImportResult.INVALID_BLOCK;
-                        result.setErrorInfo("Address isn't exist " + WalletUtils.toBase58(BytesUtils.byte32ToArray(ref.getAddress())));
-                        log.debug("Address isn't exist " + WalletUtils.toBase58(BytesUtils.byte32ToArray(ref.getAddress())));
+                        result.setErrorInfo("Address:{} balance < minGas " + WalletUtils.toBase58(BytesUtils.byte32ToArray(ref.getAddress())));
+                        log.debug("Address:{} balance < minGas " + WalletUtils.toBase58(BytesUtils.byte32ToArray(ref.getAddress())));
                         return result;
                     }
                 }
@@ -625,7 +628,9 @@ public class BlockchainImpl implements Blockchain {
                 && i > 1
                 && ct >= p.getTimestamp() + 2 * 1024) {
 //            log.info("setMain success block:{}", Hex.toHexString(p.getHashLow()));
-            setMain(p);
+            if(checkLinkBlocks(p,getBlockPubKey(p))){
+                setMain(p);
+            }
         }
     }
 
@@ -664,11 +669,12 @@ public class BlockchainImpl implements Blockchain {
     private XAmount applyBlock(Block block) {
         XAmount sumIn = XAmount.ZERO;
         XAmount sumOut = XAmount.ZERO; // sumOut是用来支付其他区块link自己的手续费 现在先用0
-
+        HashMap<Address,XAmount> gasMap = new HashMap<>();
         // 处理过
         if ((block.getInfo().flags & BI_MAIN_REF) != 0) {
-            return XAmount.ZERO.subtract(XAmount.ONE);
+            return XAmount.ZERO;
         }
+        XAmount gas = XAmount.ZERO;
         // 设置为已处理
         MutableBytes32 blockHashLow = block.getHashLow();
 
@@ -679,30 +685,45 @@ public class BlockchainImpl implements Blockchain {
             updateBlockFlag(block, BI_APPLIED, true);
             return XAmount.ZERO;
         }
-
         for (Address link : links) {
             if(!link.isAddress){
                 // 预处理时不需要拿回全部数据
                 Block ref = getBlockByHash(link.getAddress(), false);
-                XAmount ret;
+                XAmount ret = XAmount.ZERO;
                 // 如果处理过
-                if ((ref.getInfo().flags & BI_MAIN_REF) != 0) {
-                    ret = XAmount.ZERO.subtract(XAmount.ONE); //-1
-                } else {
+                if ((ref.getInfo().flags & BI_MAIN_REF) == 0) {
                     ref = getBlockByHash(link.getAddress(), true);
                     ret = applyBlock(ref);
+                    gasMap.put(link,ret);
                 }
-                if (ret.equals(XAmount.ZERO.subtract(XAmount.ONE))) {
+                if (ret.equals(XAmount.ZERO)) {
                     continue;
                 }
                 updateBlockRef(ref, new Address(block));
-
-                if (compareAmountTo(block.getInfo().getAmount().add(ret),block.getInfo().getAmount()) >= 0) {
-                    addAndAccept(block, ret);
+            }else {
+                if(link.getType() == XDAG_FIELD_INPUT){
+                    gasMap.put(link,block.getInfo().getFee());
+                    break;
                 }
             }
         }
-
+        for (Address address:gasMap.keySet()) {
+            XAmount curGas = gasMap.get(address);
+            gas = gas.add(curGas);
+            applyGas(address,block,curGas);
+        }
+//        for (Address link:links) {
+//            if (link.getType() == XdagField.FieldType.XDAG_FIELD_IN ||
+//                    link.getType() == XDAG_FIELD_INPUT ) {
+//                gas = gas.add(applyGas(link,block,XAmount.of(block.getFee().toLong())));
+//                break;
+//            }else if(link.getType() == XDAG_FIELD_OUT){
+//                Block ref = getBlockByHash(link.getAddress(), true);
+//                if ((ref.getInfo().flags & BI_MAIN_REF) == 0) {
+//                    gas = gas.add(applyGas(link, block, XAmount.of(ref.getFee().toLong())));
+//                }
+//            }
+//        }
         for (Address link : links) {
             MutableBytes32 linkAddress = link.getAddress();
             if (link.getType() == XdagField.FieldType.XDAG_FIELD_IN) {
@@ -718,18 +739,18 @@ public class BlockchainImpl implements Blockchain {
                         log.debug("This input ref doesn't have enough amount,hash:{},amount:{},need:{}",
                                 Hex.toHexString(ref.getInfo().getHashlow()), ref.getInfo().getAmount(),
                                 link.getAmount());
-                        return XAmount.ZERO;
+                        return gas;
                     }
                   }
                 else {
                     log.debug("Type error");
-                    return XAmount.ZERO;
+                    return gas;
                 }
 
                 //Verify in advance that Address amount is not negative
                 if (compareAmountTo(sumIn.add(link.getAmount()),sumIn) < 0 ){
                     log.debug("This input ref's amount less than 0");
-                    return XAmount.ZERO;
+                    return gas;
                 }
                 sumIn = sumIn.add(link.getAmount());
             } else if(link.getType() == XDAG_FIELD_INPUT){
@@ -738,19 +759,19 @@ public class BlockchainImpl implements Blockchain {
                     log.debug("This input ref doesn't have enough amount,hash:{},amount:{},need:{}",
                             Hex.toHexString(hash2byte(link.getAddress())), balance,
                             link.getAmount());
-                    return XAmount.ZERO;
+                    return gas;
                 }
                 //Verify in advance that Address amount is not negative
                 if (compareAmountTo(sumIn.add(link.getAmount()),sumIn) < 0 ){
                     log.debug("This input ref's:{} amount less than 0",linkAddress.toHexString());
-                    return XAmount.ZERO;
+                    return gas;
                 }
                 sumIn = sumIn.add(link.getAmount());
             } else {
                 ////Verify in advance that Address amount is not negative
                 if (compareAmountTo(sumOut.add(link.getAmount()),sumOut) < 0 ){
                     log.debug("This output ref's:{} amount less than 0",linkAddress.toHexString());
-                    return XAmount.ZERO;
+                    return gas;
                 }
                 sumOut = sumOut.add(link.getAmount());
             }
@@ -759,7 +780,7 @@ public class BlockchainImpl implements Blockchain {
                 compareAmountTo(block.getInfo().getAmount().add(sumIn),sumIn) < 0
         ) {
             log.debug("block:{} exec fail!",blockHashLow.toHexString());
-            return XAmount.ZERO;
+            return gas;
         }
 
         for (Address link : links) {
@@ -787,7 +808,7 @@ public class BlockchainImpl implements Blockchain {
         // 不一定大于0 因为可能部分金额扣除
         //TODO:need determine what is data;
         updateBlockFlag(block, BI_APPLIED, true);
-        return XAmount.ZERO;
+        return gas;
     }
 
     // TODO: unapply block which in snapshot
@@ -861,7 +882,18 @@ public class BlockchainImpl implements Blockchain {
             xdagStats.nmain++;
 
             // 递归执行主块引用的区块 并获取手续费
-            acceptAmount(block, applyBlock(block));
+            applyBlock(block);
+
+            List<Address> links = block.getLinks();
+            for (Address link:links) {
+                if(!link.isAddress){
+                    Block refBlock = blockStore.getBlockByHash(link.getAddress(),false);
+                    if(refBlock != null){
+                        System.out.println(blockStore.getBlockByHash(link.getAddress(),true).getInfo().getAmount().toString());
+                    }
+                }
+            }
+            System.out.println(BasicUtils.amount2xdag(blockStore.getBlockByHash(block.getHashLow(),false).getInfo().getAmount().toXAmount()));
             // 主块REF指向自身
             // TODO:补充手续费
             updateBlockRef(block, new Address(block));
@@ -993,7 +1025,7 @@ public class BlockchainImpl implements Blockchain {
      * 从orphan中获取一定数量的orphan块用来link
      **/
     public List<Address> getBlockFromOrphanPool(int num, long[] sendtime) {
-        return orphanBlockStore.getOrphan(num, sendtime);
+        return orphanBlockStore.getOrphan(num, sendtime,filter);
     }
 
     public Bytes32 getPreTopMainBlockForLink(long sendTime) {
@@ -1311,6 +1343,11 @@ public class BlockchainImpl implements Blockchain {
         return (block.getTimestamp() & 0xffff) == 0xffff && block.getNonce() != null && !block.isSaved();
     }
 
+    public boolean isMainBlock(Block block){
+        return ((block.getTimestamp() & 0xffff) == 0xffff && block.getNonce() != null);
+    }
+
+
     @Override
     public XdagStats getXdagStats() {
         return this.xdagStats;
@@ -1526,6 +1563,45 @@ public class BlockchainImpl implements Blockchain {
             log.error(e.getMessage(), e);
         }
     }
+    public boolean checkLinkBlocks(Block block,SECPPublicKey mBlockPubKey){
+//        if(mBlockPubKey)
+        List<Address> links = block.getLinks();
+        for (Address link : links) {
+            if(link.getType() == XDAG_FIELD_OUT) {
+                Block refBlock = blockStore.getBlockByHash(link.getAddress(), true);
+                if(isMainBlock(refBlock)) continue;
+                if (!filter.filterLinkBlock(refBlock)) {
+                    byte[] publicKeyBytes = mBlockPubKey.asEcPoint(Sign.CURVE).getEncoded(true);
+                    Bytes digest = Bytes.wrap(refBlock.getSubRawData(refBlock.getOutsigIndex() - 2), Bytes.wrap(publicKeyBytes));
+//            log.debug("verify encoded:{}", Hex.toHexString(digest));
+                    Bytes32 hash = Hash.hashTwice(digest);
+                    if (!Sign.SECP256K1.verify(hash, refBlock.getOutsig(), mBlockPubKey)) {
+                        return checkLinkBlocks(refBlock,mBlockPubKey);
+                    }else {
+                        return false;
+                    }
+                }
+            }
+        }
+        return true;
+    }
+
+    public SECPPublicKey getBlockPubKey(Block block){
+        List<SECPPublicKey> keys = block.verifiedKeys();
+        MutableBytes subData = block.getSubRawData(block.getOutsigIndex() - 2);
+//            log.debug("verify encoded:{}", Hex.toHexString(subdata));
+        SECPSignature sig = block.getOutsig();
+        for (SECPPublicKey publicKey : keys) {
+            byte[] publicKeyBytes = publicKey.asEcPoint(Sign.CURVE).getEncoded(true);
+            Bytes digest = Bytes.wrap(subData, Bytes.wrap(publicKeyBytes));
+//            log.debug("verify encoded:{}", Hex.toHexString(digest));
+            Bytes32 hash = Hash.hashTwice(digest);
+            if (Sign.SECP256K1.verify(hash, sig, publicKey)) {
+                return publicKey;
+            }
+        }
+        return null;
+    }
 
     @Override
     public void stopCheckMain() {
@@ -1693,6 +1769,21 @@ public class BlockchainImpl implements Blockchain {
             }
         }
         return res;
+    }
+
+    public XAmount applyGas(Address link,Block block,XAmount value){
+        boolean type = link.getIsAddress();
+        if(type){
+            System.out.println(toBase58(BasicUtils.hash2byte(link.getAddress())) + "  扣除gas: " + BasicUtils.amount2xdag(value.toXAmount()));
+            subtractAmount(BasicUtils.hash2byte(link.getAddress()),value,block);
+        }else {
+            Block refBlock = blockStore.getBlockByHash(link.getAddress(),true);
+            System.out.println(link.getAddress().toHexString() + "  扣除gas： " + BasicUtils.amount2xdag(value.toXAmount()));
+            subtractAndAccept(refBlock,value);
+        }
+        addAndAccept(block,value);
+        System.out.println(block.getHashLow().toHexString() + "  addGas： " + BasicUtils.amount2xdag(value.toXAmount()));
+        return value;
     }
 
 

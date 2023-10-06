@@ -30,6 +30,7 @@ import java.util.Arrays;
 import java.util.Objects;
 import lombok.Getter;
 import lombok.Setter;
+import org.apache.tuweni.units.bigints.UInt64;
 
 @Getter
 @Setter
@@ -41,7 +42,7 @@ public class BlockInfo {
     private BigInteger difficulty;
     private byte[] ref;
     private byte[] maxDiffLink;
-    private long fee;
+    private XAmount fee;
     private byte[] remark;
     private byte[] hash;
     private byte[] hashlow;
